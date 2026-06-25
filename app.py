@@ -105,6 +105,19 @@ async def get_stats():
     return {"documents": len(documents), "chunks": len(rag.chunks)}
 
 
+@app.get("/api/insights")
+async def get_insights():
+    """Get company insights: positives and expenditure breakdown."""
+    documents = load_documents()
+    if not documents:
+        return {
+            "positives": [],
+            "expenditure": {},
+        }
+    rag = FinanceRAG(documents)
+    return rag.get_company_insights()
+
+
 @app.post("/api/documents", status_code=201)
 async def create_document(payload: DocumentUpload):
     """Create/upload a new document."""

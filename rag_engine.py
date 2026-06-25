@@ -90,7 +90,7 @@ def chunk_text(text: str, max_words: int = 180, overlap: int = 35) -> list[str]:
 def extract_financial_metrics(text: str) -> list[str]:
     patterns = [
         r"(revenue|net sales|sales|income|profit|ebitda|gross margin|operating margin|cash flow|free cash flow|assets|liabilities|debt|eps|earnings per share)[^.:\n]{0,90}?(\$?\d+(?:,\d{3})*(?:\.\d+)?\s?(?:million|billion|m|bn|%)?)",
-        r"(\$?\d+(?:,\d{3})*(?:\.\d+)?\s?(?:million|billion|m|bn|%)?)\s+(revenue|net sales|sales|income|profit|ebitda|gross margin|operating margin|cash flow|free cash flow|assets|liabilities|debt|eps|earnings per share)",
+        r"(\$?\d+(?:,\d{3})*(?:\.\d+)?\s?(?:million|billion|m|bn|%)?\s+(revenue|net sales|sales|income|profit|ebitda|gross margin|operating margin|cash flow|free cash flow|assets|liabilities|debt)",
     ]
 
     findings: list[str] = []
@@ -104,6 +104,92 @@ def extract_financial_metrics(text: str) -> list[str]:
                 findings.append(phrase)
                 seen.add(key)
     return findings[:10]
+
+
+def extract_company_positives(text: str) -> list[str]:
+    """Extract positive aspects and strengths of the company."""
+    positive_keywords = [
+        r"strong\s+(?:growth|revenue|cash flow|balance sheet|market position)",
+        r"increased\s+(?:market share|profit|revenue|sales|efficiency)",
+        r"successful\s+(?:launch|expansion|acquisition|product)",
+        r"(?:record|high|strong)\s+(?:earnings|revenue|profit|margins)",
+        r"expanded\s+(?:operations|customer base|geographic presence)",
+        r"leading\s+(?:market|industry|position)",
+        r"improved\s+(?:efficiency|margins|performance|profitability)",
+        r"competitive\s+(?:advantage|position|edge)",
+        r"strong\s+(?:brand|reputation|customer loyalty)",
+        r"operational\s+excellence",
+    ]
+
+    positives: list[str] = []
+    seen: set[str] = set()
+    text_lower = text.lower()
+    
+    for pattern in positive_keywords:
+        for match in re.finditer(pattern, text_lower):
+            # Extract surrounding context
+            start = max(0, match.start() - 50)
+            end = min(len(text), match.end() + 50)
+            phrase = text[start:end].strip()
+            phrase = re.sub(r"\s+", " ", phrase)
+            
+            key = phrase.lower()[:100]
+            if key not in seen:
+                positives.append(phrase[:150])
+                seen.add(key)
+    
+    return positives[:8]
+
+
+def extract_expenditure_breakdown(text: str) -> dict[str, list[str]]:
+    """Extract company expenditure details by category."""
+    expenditure_patterns = {
+        "Employee Costs": [
+            r"salaries?\s+(?:and)?\s+(?:wages?|benefits?|compensation)[^.]*?(?:\$|€|£)?\s*\d+(?:,\d{3})*(?:\.\d+)?\s*(?:million|billion|m|bn)?",
+            r"payroll\s+(?:expenses?|costs?)[^.]*?(?:\$|€|£)?\s*\d+(?:,\d{3})*(?:\.\d+)?\s*(?:million|billion|m|bn)?",
+            r"personnel\s+(?:expenses?|costs?)[^.]*?(?:\$|€|£)?\s*\d+(?:,\d{3})*(?:\.\d+)?\s*(?:million|billion|m|bn)?",
+        ],
+        "Infrastructure & Technology": [
+            r"(?:capital|infrastructure|technology)\s+(?:expenditure|investment|spending)[^.]*?(?:\$|€|£)?\s*\d+(?:,\d{3})*(?:\.\d+)?\s*(?:million|billion|m|bn)?",
+            r"(?:IT|information technology|computer|system)\s+(?:expenses?|costs?|spending)[^.]*?(?:\$|€|£)?\s*\d+(?:,\d{3})*(?:\.\d+)?\s*(?:million|billion|m|bn)?",
+            r"property.*equipment\s+(?:expenses?|costs?)[^.]*?(?:\$|€|£)?\s*\d+(?:,\d{3})*(?:\.\d+)?\s*(?:million|billion|m|bn)?",
+        ],
+        "Research & Development": [
+            r"(?:research|development|r&d|r & d)\s+(?:expenses?|spending|investment)[^.]*?(?:\$|€|£)?\s*\d+(?:,\d{3})*(?:\.\d+)?\s*(?:million|billion|m|bn)?",
+            r"innovation\s+(?:expenses?|costs?)[^.]*?(?:\$|€|£)?\s*\d+(?:,\d{3})*(?:\.\d+)?\s*(?:million|billion|m|bn)?",
+        ],
+        "Marketing & Sales": [
+            r"(?:marketing|advertising|sales)\s+(?:expenses?|spending|costs?)[^.]*?(?:\$|€|£)?\s*\d+(?:,\d{3})*(?:\.\d+)?\s*(?:million|billion|m|bn)?",
+            r"promotional\s+(?:expenses?|costs?)[^.]*?(?:\$|€|£)?\s*\d+(?:,\d{3})*(?:\.\d+)?\s*(?:million|billion|m|bn)?",
+        ],
+        "Operational Costs": [
+            r"operating\s+(?:expenses?|costs?)[^.]*?(?:\$|€|£)?\s*\d+(?:,\d{3})*(?:\.\d+)?\s*(?:million|billion|m|bn)?",
+            r"cost of\s+(?:revenue|goods sold|services)[^.]*?(?:\$|€|£)?\s*\d+(?:,\d{3})*(?:\.\d+)?\s*(?:million|billion|m|bn)?",
+            r"general.*administrative\s+(?:expenses?|costs?)[^.]*?(?:\$|€|£)?\s*\d+(?:,\d{3})*(?:\.\d+)?\s*(?:million|billion|m|bn)?",
+        ],
+    }
+    
+    breakdown: dict[str, list[str]] = {}
+    text_lower = text.lower()
+    
+    for category, patterns in expenditure_patterns.items():
+        findings: list[str] = []
+        seen: set[str] = set()
+        
+        for pattern in patterns:
+            for match in re.finditer(pattern, text_lower):
+                phrase = match.group(0).strip()
+                phrase = re.sub(r"\s+", " ", phrase)
+                key = phrase.lower()[:100]
+                
+                if key not in seen and len(phrase) > 10:
+                    findings.append(phrase[:200])
+                    seen.add(key)
+        
+        if findings:
+            breakdown[category] = findings[:3]
+    
+    return breakdown
 
 
 def split_sentences(text: str) -> list[str]:
@@ -198,6 +284,15 @@ class FinanceRAG:
                 }
                 for result in results
             ],
+        }
+
+    def get_company_insights(self) -> dict:
+        """Extract company positives and expenditure breakdown."""
+        combined_text = " ".join(doc.text for doc in self.documents)
+        
+        return {
+            "positives": extract_company_positives(combined_text),
+            "expenditure": extract_expenditure_breakdown(combined_text),
         }
 
     def _extractive_answer(self, query: str, results: list[RetrievalResult]) -> str:

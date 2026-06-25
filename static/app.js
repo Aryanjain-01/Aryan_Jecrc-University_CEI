@@ -9,6 +9,8 @@ const queryInput = document.querySelector("#queryInput");
 const answerEl = document.querySelector("#answer");
 const metricsEl = document.querySelector("#metrics");
 const sourcesEl = document.querySelector("#sources");
+const positivesEl = document.querySelector("#positives");
+const expenditureEl = document.querySelector("#expenditure");
 const loadSampleBtn = document.querySelector("#loadSampleBtn");
 const clearBtn = document.querySelector("#clearBtn");
 
@@ -19,7 +21,7 @@ async function api(path, options = {}) {
   });
   const payload = await response.json();
   if (!response.ok) {
-    throw new Error(payload.error || "Request failed");
+    throw new Error(payload.detail || payload.error || "Request failed");
   }
   return payload;
 }
@@ -51,12 +53,6 @@ function renderDocuments(documents) {
     .join("");
 }
 
-async function refresh() {
-  const [documents, stats] = await Promise.all([api("/api/documents"), api("/api/stats")]);
-  renderDocuments(documents);
-  statsEl.textContent = `${stats.documents} documents · ${stats.chunks} chunks`;
-}
-
 function renderAnswer(payload) {
   answerEl.classList.remove("empty");
   answerEl.textContent = payload.answer;
@@ -78,6 +74,46 @@ function renderAnswer(payload) {
       `,
     )
     .join("");
+}
+
+function renderInsights(insights) {
+  // Render Positives
+  if (insights.positives && insights.positives.length > 0) {
+    positivesEl.innerHTML = insights.positives
+      .map((positive) => `<div class="insight-item positive-item">✓ ${positive}</div>`)
+      .join("");
+  } else {
+    positivesEl.innerHTML = `<div class="insight-item empty">No company strengths detected yet.</div>`;
+  }
+
+  // Render Expenditure Breakdown
+  if (insights.expenditure && Object.keys(insights.expenditure).length > 0) {
+    let expenditureHTML = "";
+    for (const [category, items] of Object.entries(insights.expenditure)) {
+      expenditureHTML += `
+        <div class="expenditure-category">
+          <div class="category-name">💰 ${category}</div>
+          <ul class="category-items">
+            ${items.map((item) => `<li>${item}</li>`).join("")}
+          </ul>
+        </div>
+      `;
+    }
+    expenditureEl.innerHTML = expenditureHTML;
+  } else {
+    expenditureEl.innerHTML = `<div class="insight-item empty">No expenditure details detected yet.</div>`;
+  }
+}
+
+async function refresh() {
+  const [documents, stats, insights] = await Promise.all([
+    api("/api/documents"),
+    api("/api/stats"),
+    api("/api/insights"),
+  ]);
+  renderDocuments(documents);
+  statsEl.textContent = `${stats.documents} documents · ${stats.chunks} chunks`;
+  renderInsights(insights);
 }
 
 uploadForm.addEventListener("submit", async (event) => {
