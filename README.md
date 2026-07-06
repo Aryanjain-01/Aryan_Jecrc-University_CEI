@@ -1,4 +1,4 @@
-# Fiscal Mind
+# Finance RAG project Assignment week 7
 
 **A Retrieval-Augmented Generation system for financial report analysis.**
 

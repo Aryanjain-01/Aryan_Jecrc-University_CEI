@@ -22,7 +22,7 @@ ROOT = Path(__file__).parent
 STATIC_DIR = ROOT / "static"
 SAMPLE_DIR = ROOT / "sample_reports"
 
-app = FastAPI(title="Fiscal Mind")
+app = FastAPI(title="Finance RAG project Assignment week 7")
 
 
 class DocumentUpload(BaseModel):
