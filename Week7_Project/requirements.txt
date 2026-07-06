@@ -1,3 +1,7 @@
+# Use CPU-only PyTorch to prevent Out-Of-Memory errors on Render free tier
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+
 # The app runs with Python standard library only.
 #
 # Optional PDF extraction:
