@@ -9,8 +9,13 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from rag_engine import FinanceRAG
+from rag_engine import FinanceRAG, index_document, clear_index, get_chunk_count, delete_document_index, extract_kpis
 from storage import add_document, clear_documents, delete_document, load_documents
+import document_parser
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 ROOT = Path(__file__).parent
@@ -38,25 +43,6 @@ def clean_report_text(text: str) -> str:
     return text.strip()
 
 
-def extract_pdf_text(file_bytes: bytes) -> str:
-    try:
-        import fitz  # type: ignore
-
-        document = fitz.open(stream=file_bytes, filetype="pdf")
-        return "\n".join(page.get_text("text") for page in document)
-    except Exception:
-        pass
-
-    try:
-        from pypdf import PdfReader  # type: ignore
-        import io
-
-        reader = PdfReader(io.BytesIO(file_bytes))
-        return "\n".join(page.extract_text() or "" for page in reader.pages)
-    except Exception:
-        return ""
-
-
 def decode_upload(payload: DocumentUpload) -> tuple[str, str]:
     name = payload.name
     text = payload.text
@@ -65,9 +51,9 @@ def decode_upload(payload: DocumentUpload) -> tuple[str, str]:
     if encoded_file:
         file_bytes = base64.b64decode(encoded_file)
         if name.lower().endswith(".pdf"):
-            text = extract_pdf_text(file_bytes)
+            text = document_parser.extract_pdf_content(file_bytes)
             if not text.strip():
-                raise ValueError("PDF text extraction needs PyMuPDF or pypdf installed, or a text-based PDF.")
+                raise ValueError("Could not extract any text or tables from the PDF.")
         else:
             text = file_bytes.decode("utf-8", errors="ignore")
 
@@ -80,7 +66,8 @@ def decode_upload(payload: DocumentUpload) -> tuple[str, str]:
 @app.get("/")
 async def get_root():
     """Serve the main HTML page."""
-    return StaticFiles(directory=str(STATIC_DIR)).get_directory_response("index.html")
+    from fastapi.responses import FileResponse
+    return FileResponse(str(STATIC_DIR / "index.html"))
 
 
 @app.get("/api/documents")
@@ -92,6 +79,7 @@ async def get_documents():
             "id": document.id,
             "name": document.name,
             "characters": len(document.text),
+            "kpis": getattr(document, "kpis", None),
         }
         for document in documents
     ]
@@ -101,8 +89,7 @@ async def get_documents():
 async def get_stats():
     """Get statistics about documents and chunks."""
     documents = load_documents()
-    rag = FinanceRAG(documents)
-    return {"documents": len(documents), "chunks": len(rag.chunks)}
+    return {"documents": len(documents), "chunks": get_chunk_count()}
 
 
 @app.get("/api/insights")
@@ -123,11 +110,17 @@ async def create_document(payload: DocumentUpload):
     """Create/upload a new document."""
     try:
         name, text = decode_upload(payload)
-        document = add_document(name, text)
+        
+        # Automatically extract KPIs using the AI model
+        kpis = extract_kpis(text)
+        
+        document = add_document(name, text, kpis=kpis)
+        index_document(document)
         return {
             "id": document.id,
             "name": document.name,
             "characters": len(document.text),
+            "kpis": document.kpis,
         }
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
@@ -151,8 +144,10 @@ async def query_documents(payload: QueryRequest):
 async def load_sample():
     """Load sample reports."""
     clear_documents()
+    clear_index()
     for file_path in sorted(SAMPLE_DIR.glob("*.txt")):
-        add_document(file_path.name, file_path.read_text(encoding="utf-8"))
+        doc = add_document(file_path.name, file_path.read_text(encoding="utf-8"))
+        index_document(doc)
     documents = load_documents()
     return {"loaded": len(documents)}
 
@@ -161,6 +156,7 @@ async def load_sample():
 async def clear_all():
     """Clear all documents."""
     clear_documents()
+    clear_index()
     return {"ok": True}
 
 
@@ -168,6 +164,7 @@ async def clear_all():
 async def delete_doc(document_id: str):
     """Delete a specific document."""
     if delete_document(document_id):
+        delete_document_index(document_id)
         return {"ok": True}
     else:
         raise HTTPException(status_code=404, detail="Document not found.")

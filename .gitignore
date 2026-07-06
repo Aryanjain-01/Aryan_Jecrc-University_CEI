@@ -7,3 +7,6 @@ __pycache__/
 # Runtime document library; uploaded reports may contain private data.
 data/*
 !data/.gitkeep
+
+# Vector Database (Chroma)
+chroma_db/

@@ -32,9 +32,9 @@ def save_documents(documents: list[Document]) -> None:
     )
 
 
-def add_document(name: str, text: str) -> Document:
+def add_document(name: str, text: str, kpis: dict[str, str] | None = None) -> Document:
     documents = load_documents()
-    document = Document(id=str(uuid.uuid4()), name=name, text=text)
+    document = Document(id=str(uuid.uuid4()), name=name, text=text, kpis=kpis)
     documents.append(document)
     save_documents(documents)
     return document

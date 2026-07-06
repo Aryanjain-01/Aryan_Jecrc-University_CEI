@@ -3,3 +3,18 @@
 # Optional PDF extraction:
 # pymupdf
 # pypdf
+
+# Web server
+fastapi
+uvicorn
+
+# Semantic Search
+sentence-transformers
+chromadb
+
+# Document Parsing
+PyMuPDF
+pdfplumber
+
+# Environment Variables
+python-dotenv

@@ -229,8 +229,61 @@ textarea {
 }
 
 .answer {
-  white-space: pre-wrap;
+  white-space: normal; /* Change from pre-wrap since marked.js handles paragraphs */
   line-height: 1.65;
+}
+
+/* Markdown Styling for Answers */
+.answer p {
+  margin-bottom: 16px;
+}
+
+.answer ul, .answer ol {
+  margin: 0 0 16px 0;
+  padding-left: 24px;
+}
+
+.answer li {
+  margin-bottom: 6px;
+}
+
+.answer table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+  background: #ffffff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.answer th, .answer td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.answer th {
+  background: var(--bg);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.answer tr:last-child td {
+  border-bottom: none;
+}
+
+.answer code {
+  background: var(--bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.9em;
+  color: var(--accent);
+}
+
+.answer strong {
+  color: var(--accent-strong);
 }
 
 .empty {
@@ -402,4 +455,34 @@ textarea {
   .query-form {
     grid-template-columns: 1fr;
   }
+}
+
+/* KPI Dashboard Styles */
+.kpi-dashboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.kpi-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 4px 12px rgba(23, 33, 27, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kpi-title {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.kpi-value {
+  color: var(--accent-strong);
+  font-size: 18px;
+  font-weight: 800;
 }

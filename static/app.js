@@ -55,7 +55,7 @@ function renderDocuments(documents) {
 
 function renderAnswer(payload) {
   answerEl.classList.remove("empty");
-  answerEl.textContent = payload.answer;
+  answerEl.innerHTML = marked.parse(payload.answer);
 
   metricsEl.innerHTML = payload.metrics.length
     ? payload.metrics.map((metric) => `<span class="chip">${metric}</span>`).join("")
@@ -105,6 +105,40 @@ function renderInsights(insights) {
   }
 }
 
+function renderKPIs(documents) {
+  const kpiDashboard = document.querySelector("#kpiDashboard");
+  if (!kpiDashboard) return;
+  
+  if (!documents.length) {
+    kpiDashboard.style.display = "none";
+    return;
+  }
+  
+  // Get the most recently added document's KPIs
+  const docWithKPIs = documents.slice().reverse().find(d => d.kpis);
+  
+  if (!docWithKPIs || !docWithKPIs.kpis || Object.keys(docWithKPIs.kpis).length === 0) {
+    kpiDashboard.style.display = "none";
+    return;
+  }
+  
+  const html = Object.entries(docWithKPIs.kpis)
+    .filter(([_, value]) => value && value !== "N/A" && value !== "null" && value !== "None")
+    .map(([key, value]) => `
+      <div class="kpi-card">
+        <span class="kpi-title">${key}</span>
+        <span class="kpi-value">${value}</span>
+      </div>
+    `).join("");
+    
+  if (html) {
+    kpiDashboard.style.display = "grid";
+    kpiDashboard.innerHTML = html;
+  } else {
+    kpiDashboard.style.display = "none";
+  }
+}
+
 async function refresh() {
   const [documents, stats, insights] = await Promise.all([
     api("/api/documents"),
@@ -112,6 +146,7 @@ async function refresh() {
     api("/api/insights"),
   ]);
   renderDocuments(documents);
+  renderKPIs(documents);
   statsEl.textContent = `${stats.documents} documents · ${stats.chunks} chunks`;
   renderInsights(insights);
 }

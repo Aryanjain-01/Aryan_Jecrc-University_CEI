@@ -1,44 +1,15 @@
 from __future__ import annotations
 
-import math
 import os
 import re
 import urllib.error
 import urllib.request
 import json
-from collections import Counter, defaultdict
 from dataclasses import dataclass, asdict
 from typing import Iterable
 
-
-STOP_WORDS = {
-    "a",
-    "an",
-    "and",
-    "are",
-    "as",
-    "at",
-    "be",
-    "by",
-    "for",
-    "from",
-    "has",
-    "have",
-    "in",
-    "is",
-    "it",
-    "its",
-    "of",
-    "on",
-    "or",
-    "that",
-    "the",
-    "their",
-    "to",
-    "was",
-    "were",
-    "with",
-}
+import chromadb
+from sentence_transformers import SentenceTransformer, util
 
 
 @dataclass
@@ -46,6 +17,7 @@ class Document:
     id: str
     name: str
     text: str
+    kpis: dict[str, str] | None = None
 
 
 @dataclass
@@ -61,11 +33,6 @@ class Chunk:
 class RetrievalResult:
     chunk: Chunk
     score: float
-
-
-def tokenize(text: str) -> list[str]:
-    words = re.findall(r"[a-zA-Z][a-zA-Z0-9&.-]*", text.lower())
-    return [word for word in words if word not in STOP_WORDS and len(word) > 1]
 
 
 def chunk_text(text: str, max_words: int = 180, overlap: int = 35) -> list[str]:
@@ -90,7 +57,7 @@ def chunk_text(text: str, max_words: int = 180, overlap: int = 35) -> list[str]:
 def extract_financial_metrics(text: str) -> list[str]:
     patterns = [
         r"(revenue|net sales|sales|income|profit|ebitda|gross margin|operating margin|cash flow|free cash flow|assets|liabilities|debt|eps|earnings per share)[^.:\n]{0,90}?(\$?\d+(?:,\d{3})*(?:\.\d+)?\s?(?:million|billion|m|bn|%)?)",
-        r"(\$?\d+(?:,\d{3})*(?:\.\d+)?\s?(?:million|billion|m|bn|%)?\s+(revenue|net sales|sales|income|profit|ebitda|gross margin|operating margin|cash flow|free cash flow|assets|liabilities|debt)",
+        r"(\$?\d+(?:,\d{3})*(?:\.\d+)?\s?(?:million|billion|m|bn|%)?)\s+(revenue|net sales|sales|income|profit|ebitda|gross margin|operating margin|cash flow|free cash flow|assets|liabilities|debt)",
     ]
 
     findings: list[str] = []
@@ -196,66 +163,84 @@ def split_sentences(text: str) -> list[str]:
     return [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", text) if sentence.strip()]
 
 
+# Initialize semantic model globally to prevent reloading on every request
+MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+chroma_client = chromadb.PersistentClient(path="data/chroma")
+collection = chroma_client.get_or_create_collection(name="finance_chunks")
+
+def index_document(document: Document):
+    chunks = chunk_text(document.text)
+    if not chunks:
+        return
+    
+    ids = []
+    documents = []
+    metadatas = []
+    
+    for i, text in enumerate(chunks):
+        ids.append(f"{document.id}::chunk-{i+1}")
+        documents.append(text)
+        metadatas.append({
+            "document_id": document.id,
+            "document_name": document.name,
+            "chunk_index": i + 1
+        })
+        
+    # We use sentence-transformers to encode so we have consistent vectors
+    embeddings = MODEL.encode(documents, convert_to_tensor=False).tolist()
+    
+    collection.add(
+        ids=ids,
+        documents=documents,
+        metadatas=metadatas,
+        embeddings=embeddings
+    )
+
+def clear_index():
+    global collection
+    try:
+        chroma_client.delete_collection("finance_chunks")
+    except ValueError:
+        pass
+    collection = chroma_client.get_or_create_collection(name="finance_chunks")
+
+def get_chunk_count() -> int:
+    return collection.count()
+
+def delete_document_index(document_id: str):
+    collection.delete(where={"document_id": document_id})
+
 class FinanceRAG:
     def __init__(self, documents: Iterable[Document]):
         self.documents = list(documents)
-        self.chunks = self._build_chunks(self.documents)
-        self.chunk_term_counts = [Counter(tokenize(chunk.text)) for chunk in self.chunks]
-        self.idf = self._build_idf(self.chunk_term_counts)
-        self.chunk_vectors = [self._weight_vector(counter) for counter in self.chunk_term_counts]
-
-    def _build_chunks(self, documents: list[Document]) -> list[Chunk]:
-        chunks: list[Chunk] = []
-        for document in documents:
-            for index, text in enumerate(chunk_text(document.text)):
-                chunks.append(
-                    Chunk(
-                        id=f"{document.id}::chunk-{index + 1}",
-                        document_id=document.id,
-                        document_name=document.name,
-                        text=text,
-                        chunk_index=index + 1,
-                    )
-                )
-        return chunks
-
-    def _build_idf(self, counters: list[Counter[str]]) -> dict[str, float]:
-        doc_frequency: defaultdict[str, int] = defaultdict(int)
-        for counter in counters:
-            for term in counter:
-                doc_frequency[term] += 1
-
-        total = max(len(counters), 1)
-        return {term: math.log((1 + total) / (1 + freq)) + 1 for term, freq in doc_frequency.items()}
-
-    def _weight_vector(self, counter: Counter[str]) -> dict[str, float]:
-        total_terms = sum(counter.values()) or 1
-        return {term: (count / total_terms) * self.idf.get(term, 0.0) for term, count in counter.items()}
-
-    @staticmethod
-    def _cosine(left: dict[str, float], right: dict[str, float]) -> float:
-        if not left or not right:
-            return 0.0
-
-        numerator = sum(left.get(term, 0.0) * right.get(term, 0.0) for term in left.keys() & right.keys())
-        left_norm = math.sqrt(sum(value * value for value in left.values()))
-        right_norm = math.sqrt(sum(value * value for value in right.values()))
-        if left_norm == 0 or right_norm == 0:
-            return 0.0
-        return numerator / (left_norm * right_norm)
+        self.model = MODEL
 
     def retrieve(self, query: str, top_k: int = 5) -> list[RetrievalResult]:
-        query_counter = Counter(tokenize(query))
-        query_vector = self._weight_vector(query_counter)
-        ranked: list[RetrievalResult] = []
+        if collection.count() == 0:
+            return []
 
-        for chunk, chunk_vector in zip(self.chunks, self.chunk_vectors):
-            score = self._cosine(query_vector, chunk_vector)
-            if score > 0:
+        query_embedding = self.model.encode(query, convert_to_tensor=False).tolist()
+        
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=top_k
+        )
+        
+        ranked: list[RetrievalResult] = []
+        if results['ids'] and results['ids'][0]:
+            for i in range(len(results['ids'][0])):
+                meta = results['metadatas'][0][i]
+                chunk = Chunk(
+                    id=results['ids'][0][i],
+                    document_id=meta['document_id'],
+                    document_name=meta['document_name'],
+                    text=results['documents'][0][i],
+                    chunk_index=meta['chunk_index']
+                )
+                score = 1.0 / (1.0 + results['distances'][0][i])
                 ranked.append(RetrievalResult(chunk=chunk, score=score))
 
-        ranked.sort(key=lambda result: result.score, reverse=True)
-        return ranked[:top_k]
+        return ranked
 
     def answer(self, query: str, top_k: int = 5) -> dict:
         results = self.retrieve(query, top_k=top_k)
@@ -296,20 +281,27 @@ class FinanceRAG:
         }
 
     def _extractive_answer(self, query: str, results: list[RetrievalResult]) -> str:
-        query_terms = set(tokenize(query))
-        candidates: list[tuple[int, str, Chunk]] = []
+        query_vector = self.model.encode(query, convert_to_tensor=True)
+        candidates: list[tuple[float, str, Chunk]] = []
 
         for result in results:
-            for sentence in split_sentences(result.chunk.text):
-                overlap = len(query_terms & set(tokenize(sentence)))
-                if overlap:
-                    candidates.append((overlap, sentence, result.chunk))
+            sentences = split_sentences(result.chunk.text)
+            if not sentences:
+                continue
+                
+            sentence_embeddings = self.model.encode(sentences, convert_to_tensor=True)
+            similarities = util.cos_sim(query_vector, sentence_embeddings)[0]
+            
+            for sentence, score in zip(sentences, similarities):
+                score_val = float(score)
+                if score_val > 0.1:
+                    candidates.append((score_val, sentence, result.chunk))
 
         candidates.sort(key=lambda item: item[0], reverse=True)
         if not candidates:
             first_sentences = split_sentences(results[0].chunk.text)
             first_sentence = first_sentences[0] if first_sentences else results[0].chunk.text
-            candidates = [(0, first_sentence, results[0].chunk)]
+            candidates = [(0.0, first_sentence, results[0].chunk)]
 
         lines = []
         used_sentences: set[str] = set()
@@ -335,23 +327,27 @@ class FinanceRAG:
         )
         prompt = (
             "You are a finance report analysis assistant. Answer only from the supplied context. "
+            "IMPORTANT: Use clear bullet points (pointers) for readability and present financial data/numbers prominently. "
             "Include citations in square brackets using the provided source and chunk labels. "
             "If the context is insufficient, say so.\n\n"
             f"Question: {query}\n\nContext:\n{context}"
         )
         body = json.dumps(
             {
-                "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                "model": os.getenv("OPENAI_MODEL", "qwen/qwen3-32b"),
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.2,
             }
         ).encode("utf-8")
+        
+        base_url = os.getenv("OPENAI_BASE_URL", "https://api.groq.com/openai/v1/chat/completions")
         request = urllib.request.Request(
-            "https://api.openai.com/v1/chat/completions",
+            base_url,
             data=body,
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
+                "User-Agent": "FiscalMind/1.0",
             },
             method="POST",
         )
@@ -362,3 +358,65 @@ class FinanceRAG:
                 return payload["choices"][0]["message"]["content"].strip()
         except (urllib.error.URLError, KeyError, IndexError, json.JSONDecodeError):
             return None
+
+
+def extract_kpis(text: str) -> dict[str, str] | None:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return None
+
+    # We take the first 40,000 characters (~10,000 tokens) to stay within context limits
+    # and because KPIs are usually in the first few pages of the report.
+    context = text[:40000]
+
+    prompt = (
+        "You are an expert financial analyst. Extract the following KPIs from the provided document text:\n"
+        "- Revenue\n"
+        "- Profit\n"
+        "- Assets\n"
+        "- Liabilities\n"
+        "- Promoter Holding\n"
+        "- FII Holding\n"
+        "- DII Holding\n"
+        "- Public Holding\n"
+        "- Operating Cash Flow\n"
+        "- Investing Cash Flow\n"
+        "- Financing Cash Flow\n\n"
+        "If a metric is not found in the text, use 'N/A'. Keep values extremely concise (e.g., '$10.5B', '45%', '2,340 cr').\n"
+        "Output ONLY a valid JSON object where the keys are the exact metric names above.\n\n"
+        f"Document Text:\n{context}"
+    )
+
+    body = json.dumps(
+        {
+            "model": os.getenv("OPENAI_MODEL", "qwen/qwen3-32b"),
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.1,
+        }
+    ).encode("utf-8")
+
+    base_url = os.getenv("OPENAI_BASE_URL", "https://api.groq.com/openai/v1/chat/completions")
+    request = urllib.request.Request(
+        base_url,
+        data=body,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "FiscalMind/1.0",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            content = payload["choices"][0]["message"]["content"].strip()
+            # Clean markdown code blocks if the AI returns them
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+            return json.loads(content)
+    except Exception as e:
+        print(f"Error extracting KPIs: {e}")
+        return None
