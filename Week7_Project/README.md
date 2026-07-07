@@ -1,5 +1,7 @@
 # Finance RAG project Assignment week 7
 
+🚀 **Live App:** [https://finance-rag-3v3n.onrender.com/](https://finance-rag-3v3n.onrender.com/)
+
 **A Retrieval-Augmented Generation system for financial report analysis.**
 
 An end-to-end Retrieval-Augmented Generation project for analyzing annual reports, earnings notes, and finance filings. It runs locally with Python's standard library and uses a transparent TF-IDF retriever, so you can demo the full RAG workflow without setting up a vector database or paid API.
