@@ -1,7 +1,3 @@
-# Use CPU-only PyTorch to prevent Out-Of-Memory errors on Render free tier
---extra-index-url https://download.pytorch.org/whl/cpu
-torch
-
 # The app runs with Python standard library only.
 #
 # Optional PDF extraction:
@@ -12,9 +8,10 @@ torch
 fastapi
 uvicorn
 
-# Semantic Search
-sentence-transformers
+# Semantic Search (Lightweight ONNX)
 chromadb
+onnxruntime
+numpy
 
 # Document Parsing
 PyMuPDF

@@ -9,7 +9,8 @@ from dataclasses import dataclass, asdict
 from typing import Iterable
 
 import chromadb
-from sentence_transformers import SentenceTransformer, util
+from chromadb.utils import embedding_functions
+import numpy as np
 
 
 @dataclass
@@ -164,7 +165,7 @@ def split_sentences(text: str) -> list[str]:
 
 
 # Initialize semantic model globally to prevent reloading on every request
-MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+MODEL = embedding_functions.DefaultEmbeddingFunction()
 chroma_client = chromadb.PersistentClient(path="data/chroma")
 collection = chroma_client.get_or_create_collection(name="finance_chunks")
 
@@ -186,8 +187,8 @@ def index_document(document: Document):
             "chunk_index": i + 1
         })
         
-    # We use sentence-transformers to encode so we have consistent vectors
-    embeddings = MODEL.encode(documents, convert_to_tensor=False).tolist()
+    # We use chroma default embedding function
+    embeddings = MODEL(documents)
     
     collection.add(
         ids=ids,
@@ -219,7 +220,7 @@ class FinanceRAG:
         if collection.count() == 0:
             return []
 
-        query_embedding = self.model.encode(query, convert_to_tensor=False).tolist()
+        query_embedding = self.model([query])[0]
         
         results = collection.query(
             query_embeddings=[query_embedding],
@@ -281,7 +282,7 @@ class FinanceRAG:
         }
 
     def _extractive_answer(self, query: str, results: list[RetrievalResult]) -> str:
-        query_vector = self.model.encode(query, convert_to_tensor=True)
+        query_vector = self.model([query])[0]
         candidates: list[tuple[float, str, Chunk]] = []
 
         for result in results:
@@ -289,8 +290,16 @@ class FinanceRAG:
             if not sentences:
                 continue
                 
-            sentence_embeddings = self.model.encode(sentences, convert_to_tensor=True)
-            similarities = util.cos_sim(query_vector, sentence_embeddings)[0]
+            sentence_embeddings = self.model(sentences)
+            
+            q_arr = np.array(query_vector)
+            s_mat = np.array(sentence_embeddings)
+            
+            # Compute cosine similarity manually using numpy
+            norms = np.linalg.norm(s_mat, axis=1) * np.linalg.norm(q_arr)
+            # Avoid division by zero
+            norms[norms == 0] = 1e-10 
+            similarities = np.dot(s_mat, q_arr) / norms
             
             for sentence, score in zip(sentences, similarities):
                 score_val = float(score)
