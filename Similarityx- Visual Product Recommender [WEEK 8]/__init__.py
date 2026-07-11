@@ -1,1 +1,0 @@
-"""SimilarityX AI — source package."""
