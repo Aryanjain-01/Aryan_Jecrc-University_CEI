@@ -18,6 +18,7 @@ import numpy as np
 
 from src.embeddings import load_embeddings
 from src.feature_extractor import get_embedding
+from src.improved_embeddings import IMPROVED_PKL, embed_image_improved
 
 _EPS = 1e-8
 
@@ -31,8 +32,23 @@ def _l2_normalize(x: np.ndarray, axis: int) -> np.ndarray:
 class Recommender:
     """Holds the catalog index and serves Top-K visual recommendations."""
 
-    def __init__(self):
-        data = load_embeddings()
+    def __init__(self, model_name: str = "baseline"):
+        if model_name not in {"baseline", "improved"}:
+            raise ValueError("model_name must be 'baseline' or 'improved'")
+
+        self.model_name = model_name
+        if model_name == "baseline":
+            data = load_embeddings()
+            self.label = "Baseline ResNet50"
+            self.embedding_dim = 2048
+        else:
+            import pickle
+
+            with open(IMPROVED_PKL, "rb") as f:
+                data = pickle.load(f)
+            self.label = "Siamese improved"
+            self.embedding_dim = 128
+
         self.embeddings = data["embeddings"]          # (N, 2048) raw
         self.ids = data["ids"]                        # (N,)
         self.image_paths = data["image_paths"]        # length N
@@ -40,22 +56,36 @@ class Recommender:
         # Pre-normalize once -> cosine similarity becomes a dot product.
         self._normed = _l2_normalize(self.embeddings, axis=1).astype("float32")
 
-    def recommend(self, source, k: int = 5, exclude_id: int | None = None):
+    def _embed_query(self, source) -> np.ndarray:
+        """Embed one query image in the active model's vector space."""
+        if self.model_name == "baseline":
+            return get_embedding(source).astype("float32")
+        return embed_image_improved(source).astype("float32")
+
+    def recommend(
+        self,
+        source,
+        k: int = 5,
+        exclude_id: int | None = None,
+        filters: dict | None = None,
+    ):
         """Return (results, elapsed_ms).
 
         `source`     : image path / PIL image / file-like (Streamlit upload).
         `exclude_id` : if the query IS a catalog item, pass its id to drop the
                        self-match. If None, we instead drop any near-1.0 hit
                        (handles an uploaded image identical to a catalog image).
+        `filters`    : optional category/gender/baseColour values to require.
         `results`    : list of dicts with score + id + image_path + metadata,
                        ranked most-similar first.
         """
         t0 = time.time()
-        q = get_embedding(source).astype("float32")
+        q = self._embed_query(source)
         q = _l2_normalize(q, axis=0)
         sims = self._normed @ q                       # (N,) cosine similarities
         order = np.argsort(-sims)                     # indices, highest first
 
+        filters = {k: v for k, v in (filters or {}).items() if v}
         results = []
         for idx in order:
             score = float(sims[idx])
@@ -65,6 +95,8 @@ class Recommender:
             if exclude_id is None and score >= 0.9999:  # self / exact duplicate
                 continue
             meta = self.metadata.iloc[idx].to_dict()
+            if any(str(meta.get(key, "")) != str(value) for key, value in filters.items()):
+                continue
             results.append({"score": score, "id": row_id,
                             "image_path": self.image_paths[idx], **meta})
             if len(results) == k:

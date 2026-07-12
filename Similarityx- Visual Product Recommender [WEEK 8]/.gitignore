@@ -1,0 +1,39 @@
+# ------------------------------------------------------------------ #
+# Data — large and/or regenerable. Never commit the dataset or index.
+# (README explains how to download data and rebuild these.)
+# ------------------------------------------------------------------ #
+data/raw/*
+!data/raw/.gitkeep
+data/subset/*
+!data/subset/.gitkeep
+
+# Generated embeddings (33 MB, regenerable via src/embeddings.py)
+artifacts/embeddings/*
+!artifacts/embeddings/.gitkeep
+
+# Keep the small diagnostic figures (nice for showcasing) but ignore
+# anything else generated. Comment the next line out to also ignore figures.
+# artifacts/figures/*.png
+
+# ------------------------------------------------------------------ #
+# Python
+# ------------------------------------------------------------------ #
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+
+# ------------------------------------------------------------------ #
+# Secrets — NEVER commit your Kaggle key
+# ------------------------------------------------------------------ #
+kaggle.json
+
+# ------------------------------------------------------------------ #
+# OS / editor
+# ------------------------------------------------------------------ #
+.DS_Store
+.vscode/
+.idea/
