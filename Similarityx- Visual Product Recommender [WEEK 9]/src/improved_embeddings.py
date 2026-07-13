@@ -63,7 +63,7 @@ def embed_image_improved(source) -> np.ndarray:
     """Query-time: raw image -> frozen ResNet50 -> trained head -> (128,) vector."""
     from src.feature_extractor import get_embedding      # lazy: avoids circular import
     base = get_embedding(source).reshape(1, -1)          # (1, 2048)
-    return get_head().predict(base, verbose=0)[0]        # (128,)
+    return get_head()(base, training=False).numpy()[0]   # (128,)
 
 
 if __name__ == "__main__":

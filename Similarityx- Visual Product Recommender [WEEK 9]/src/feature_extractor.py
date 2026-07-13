@@ -45,7 +45,7 @@ def get_embedding(source) -> np.ndarray:
     """Embed a single image (path / PIL / file-like) -> (2048,) float32 vector."""
     x = preprocess_image(source)                     # (224, 224, 3)
     x = np.expand_dims(x, axis=0)                    # (1, 224, 224, 3) — add batch dim
-    emb = get_model().predict(x, verbose=0)          # (1, 2048)
+    emb = get_model()(x, training=False).numpy()     # (1, 2048)
     return emb[0]                                    # (2048,)
 
 
