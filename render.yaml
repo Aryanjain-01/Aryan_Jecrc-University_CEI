@@ -4,4 +4,4 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: streamlit run "Similarityx- Visual Product Recommender [WEEK 8]/app/streamlit_app.py" --server.port=$PORT --server.address=0.0.0.0 --logger.level=error
+    startCommand: streamlit run "Similarityx- Visual Product Recommender [WEEK 9]/app/streamlit_app.py" --server.port=$PORT --server.address=0.0.0.0 --logger.level=error
