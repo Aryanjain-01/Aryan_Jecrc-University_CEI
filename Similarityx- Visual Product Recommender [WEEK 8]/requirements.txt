@@ -1,11 +1,11 @@
 # SimilarityX AI — Python dependencies
 # Install:  pip install -r requirements.txt
 
-tensorflow>=2.12          # deep learning (Keras is bundled inside)
+tensorflow-cpu==2.16.1      # deep learning (CPU version is lighter for Render)
 numpy>=1.23               # numerical arrays / vectors
 pandas>=1.5               # styles.csv handling
 scikit-learn>=1.2         # cosine similarity, nearest-neighbor search, metrics
-opencv-python>=4.7        # OpenCV image ops (Step 3+)
+opencv-python-headless>=4.7 # headless version is required for Render (no libGL dependencies)
 Pillow>=9.4               # image loading / conversion
 matplotlib>=3.6           # visualization
 streamlit>=1.25           # dashboard (Step 7)
