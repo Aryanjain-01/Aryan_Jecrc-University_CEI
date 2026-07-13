@@ -336,6 +336,23 @@ st.markdown(
     "and cosine similarity."
 )
 
+import os
+if not os.path.exists(SUBSET_CSV):
+    st.error("🚨 **Dataset Not Found!**")
+    st.markdown(
+        "It looks like the dataset and embeddings are missing. Because these files are "
+        "in your `.gitignore`, Render never received them when downloading your code from GitHub.\n\n"
+        "**To fix this, open your local terminal and run these exact commands:**\n"
+        "```bash\n"
+        "git add -f \"Similarityx- Visual Product Recommender [WEEK 8]/data/subset\"\n"
+        "git add -f \"Similarityx- Visual Product Recommender [WEEK 8]/artifacts/embeddings\"\n"
+        "git commit -m \"Upload precomputed dataset and embeddings for Render\"\n"
+        "git push\n"
+        "```\n"
+        "Once pushed, clear the build cache and deploy again on Render."
+    )
+    st.stop()
+
 catalog = load_catalog()
 
 MODEL_OPTIONS = {
