@@ -1,3 +1,14 @@
+---
+title: SimilarityX AI
+emoji: 🛍️
+colorFrom: blue
+colorTo: green
+sdk: streamlit
+sdk_version: 1.36.0
+app_file: app/streamlit_app.py
+pinned: false
+---
+
 # SimilarityX AI
 **AI-Powered Visual Product Recommendation Engine using Deep Metric Learning**
 
