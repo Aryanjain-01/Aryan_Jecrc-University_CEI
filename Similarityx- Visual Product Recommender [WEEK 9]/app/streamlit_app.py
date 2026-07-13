@@ -15,6 +15,19 @@ take seconds. With caching, load happens once and every query is instant.
 
 from __future__ import annotations
 
+import os
+# --- MEMORY OPTIMIZATION FOR RENDER FREE TIER (512MB RAM) ---
+os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["TF_NUM_INTRAOP_THREADS"] = "1"
+os.environ["TF_NUM_INTEROP_THREADS"] = "1"
+
+import tensorflow as tf
+tf.config.threading.set_inter_op_parallelism_threads(1)
+tf.config.threading.set_intra_op_parallelism_threads(1)
+# ------------------------------------------------------------
+
 import base64
 import html
 import os
@@ -478,5 +491,9 @@ with right:
                         query_image, k=k, exclude_id=exclude_id, filters=filters
                     )
                 show_results(results, elapsed_ms)
+        
+        # Aggressive memory cleanup after inference
+        import gc
+        gc.collect()
     else:
         st.info("⬅️ Upload an image or click **Surprise me** to see recommendations.")
