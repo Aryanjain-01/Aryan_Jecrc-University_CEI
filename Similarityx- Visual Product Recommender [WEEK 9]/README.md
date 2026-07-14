@@ -10,6 +10,8 @@ pinned: false
 ---
 
 # SimilarityX AI
+🚀 **Live Demo:** [https://similarityx.streamlit.app/](https://similarityx.streamlit.app/)
+
 **AI-Powered Visual Product Recommendation Engine using Deep Metric Learning**
 
 Given a fashion product image, retrieve the most visually similar products in the catalog.
