@@ -15,6 +15,7 @@ numpy
 
 # Document Parsing
 PyMuPDF
+pymupdf4llm
 
 # Environment Variables
 python-dotenv

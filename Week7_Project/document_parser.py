@@ -1,10 +1,12 @@
 import fitz  # type: ignore
+import pymupdf4llm
 
 def extract_pdf_content(file_bytes: bytes) -> str:
-    """Extract text from a PDF using PyMuPDF for maximum memory efficiency."""
+    """Extract text and markdown tables from a PDF using pymupdf4llm."""
     try:
         document = fitz.open(stream=file_bytes, filetype="pdf")
-        return "\n".join(page.get_text("text") for page in document)
+        md_text = pymupdf4llm.to_markdown(doc=document)
+        return md_text
     except Exception as e:
-        print(f"PyMuPDF failed: {e}")
+        print(f"pymupdf4llm failed: {e}")
         return ""
